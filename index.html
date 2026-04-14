@@ -1,0 +1,2111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AA Area Archives — Interactive Kiosk</title>
+
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Animate.css -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;600;700;800&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+
+    <style>
+        /*
+        ================================================================
+        MAINTAINER CONFIG — Change these to customize the look & timing
+        ================================================================
+        */
+        :root {
+            --navy:         #1a2744;
+            --blue:         #2c4a7c;
+            --gold:         #c9a84c;
+            --gold-light:   #e8d48b;
+            --cream:        #faf6ee;
+            --dark:         #0b1222;
+            --darker:       #060d18;
+            --slide-ms:     10000;   /* time per content slide */
+            --trivia-ms:    14000;   /* time per trivia slide (question + answer) */
+            --reveal-ms:    6000;    /* answer reveals after this many ms */
+            --photo-ms:     8000;    /* time per photo slide */
+            --fade-ms:      1200;    /* crossfade duration */
+        }
+
+        /* ============ RESET ============ */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body {
+            height: 100%; width: 100%;
+            overflow: hidden;
+            background: var(--darker);
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+        }
+        h1,h2,h3,h4,h5,h6 { font-family: 'Playfair Display', serif; }
+
+        /* ============ KIOSK FRAME ============ */
+        #kiosk {
+            position: fixed; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* ============ SLIDE LAYER ============ */
+        .slide {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column;
+            padding: 40px 60px;
+            opacity: 0;
+            transition: opacity calc(var(--fade-ms) * 1ms) ease;
+            pointer-events: none;
+            text-align: center;
+        }
+        .slide.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* ============ BACKGROUND VARIATIONS ============ */
+        .bg-0  { background: linear-gradient(135deg, #0b1222 0%, #1a2744 50%, #2c4a7c 100%); }
+        .bg-1  { background: linear-gradient(135deg, #0d1b2a 0%, #1b2838 60%, #2d4059 100%); }
+        .bg-2  { background: linear-gradient(135deg, #10141f 0%, #2a1f0f 50%, #3d2c10 100%); }
+        .bg-3  { background: linear-gradient(135deg, #0a1628 0%, #1a2744 50%, #1e3a5f 100%); }
+        .bg-4  { background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #25254a 100%); }
+        .bg-5  { background: linear-gradient(135deg, #1a0f0f 0%, #2e1a1a 50%, #3a2020 100%); }
+        .bg-6  { background: linear-gradient(135deg, #0d1f0d 0%, #1a2e1a 50%, #1e3a2a 100%); }
+        .bg-7  { background: linear-gradient(160deg, #18122B 0%, #271f3e 50%, #443366 100%); }
+
+        /* ============ PARTICLES ============ */
+        .particles {
+            position: absolute; inset: 0;
+            pointer-events: none; overflow: hidden;
+        }
+        .particle {
+            position: absolute;
+            background: var(--gold);
+            border-radius: 50%;
+            opacity: 0;
+            animation: floatUp linear infinite;
+        }
+        @keyframes floatUp {
+            0%   { opacity: 0; transform: translateY(100vh) scale(0); }
+            10%  { opacity: 0.5; }
+            90%  { opacity: 0.3; }
+            100% { opacity: 0; transform: translateY(-10vh) scale(1.2); }
+        }
+
+        /* ============ CORNER DECORATIONS ============ */
+        .corner-deco {
+            position: absolute;
+            width: 80px; height: 80px;
+            border-color: var(--gold);
+            border-style: solid;
+            border-width: 0;
+            opacity: 0.25;
+        }
+        .corner-tl { top: 20px; left: 20px; border-top-width: 3px; border-left-width: 3px; }
+        .corner-tr { top: 20px; right: 20px; border-top-width: 3px; border-right-width: 3px; }
+        .corner-bl { bottom: 20px; left: 20px; border-bottom-width: 3px; border-left-width: 3px; }
+        .corner-br { bottom: 20px; right: 20px; border-bottom-width: 3px; border-right-width: 3px; }
+
+        /* ============ PROGRESS RING (bottom center) ============ */
+        #timerRing {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            width: 50px; height: 50px;
+        }
+        #timerRing svg {
+            transform: rotate(-90deg);
+        }
+        #timerRing circle {
+            fill: none;
+            stroke-width: 3;
+        }
+        .ring-bg   { stroke: rgba(201,168,76,0.15); }
+        .ring-fill { stroke: var(--gold); stroke-dasharray: 138.23; stroke-dashoffset: 0; transition: stroke-dashoffset 0.3s linear; }
+
+        /* ============ SLIDE TYPE BADGE ============ */
+        .slide-badge {
+            position: absolute;
+            top: 22px; left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background: rgba(201,168,76,0.15);
+            border: 1px solid rgba(201,168,76,0.3);
+            color: var(--gold);
+            padding: 8px 30px;
+            border-radius: 30px;
+            font-size: clamp(0.8rem, 1.8vmin, 1.1rem);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            font-weight: 700;
+            backdrop-filter: blur(5px);
+        }
+
+        /* ============ FULLSCREEN BUTTON ============ */
+        #fsBtn {
+            position: fixed;
+            bottom: 20px; right: 20px;
+            z-index: 200;
+            width: clamp(44px, 6vmin, 64px);
+            height: clamp(44px, 6vmin, 64px);
+            border-radius: 50%;
+            border: 2px solid rgba(201,168,76,0.4);
+            background: rgba(15,18,34,0.7);
+            color: var(--gold);
+            font-size: clamp(1.2rem, 2.5vmin, 1.8rem);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            transition: all 0.3s;
+        }
+        #fsBtn:hover {
+            background: var(--gold);
+            color: var(--dark);
+            border-color: var(--gold);
+            transform: scale(1.1);
+        }
+
+        /* ============================================================
+           GIANT TEXT — uses vmin so text scales with BOTH dimensions.
+           On a 1920x1080 display, 1vmin = 10.8px.
+           On a 1080x1920 portrait, 1vmin = 10.8px too.
+           This ensures readability regardless of screen orientation.
+           ============================================================ */
+        .mega-title {
+            font-size: clamp(3rem, 9vmin, 8rem);
+            font-weight: 900;
+            line-height: 1.05;
+            margin-bottom: 0.3em;
+        }
+        .mega-title .gold { color: var(--gold); }
+
+        .big-heading {
+            font-size: clamp(2.5rem, 7vmin, 5.5rem);
+            font-weight: 700;
+            line-height: 1.15;
+            margin-bottom: 0.3em;
+        }
+
+        .big-body {
+            font-size: clamp(1.6rem, 3.8vmin, 2.8rem);
+            line-height: 1.5;
+            color: rgba(255,255,255,0.9);
+            max-width: 1100px;
+            margin-left: auto;
+            margin-right: auto;
+            font-weight: 300;
+        }
+
+        .big-quote {
+            font-family: 'Crimson Text', serif;
+            font-style: italic;
+            font-size: clamp(1.8rem, 5vmin, 3.5rem);
+            color: var(--gold-light);
+            line-height: 1.4;
+            max-width: 1000px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .quote-attr {
+            font-family: 'Inter', sans-serif;
+            font-style: normal;
+            font-size: clamp(1rem, 2.5vmin, 1.6rem);
+            color: var(--gold);
+            margin-top: 0.8em;
+            font-weight: 600;
+        }
+
+        .gold-rule {
+            width: 120px; height: 5px;
+            background: var(--gold);
+            margin: 0.6em auto;
+            border-radius: 3px;
+        }
+
+        /* ============ TRIVIA SLIDE ============ */
+        .trivia-category {
+            display: inline-block;
+            background: rgba(201,168,76,0.2);
+            color: var(--gold);
+            padding: 10px 32px;
+            border-radius: 30px;
+            font-size: clamp(0.9rem, 2vmin, 1.3rem);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            font-weight: 700;
+            margin-bottom: 0.8em;
+        }
+        .trivia-difficulty {
+            display: inline-block;
+            padding: 6px 18px;
+            border-radius: 6px;
+            font-size: clamp(0.7rem, 1.5vmin, 1rem);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 700;
+            margin-left: 12px;
+            vertical-align: middle;
+        }
+        .diff-easy   { background: rgba(40,167,69,0.25); color: #6fdc8c; }
+        .diff-medium { background: rgba(255,193,7,0.25); color: #ffe066; }
+        .diff-hard   { background: rgba(220,53,69,0.25); color: #ff8a8a; }
+
+        .trivia-q {
+            font-size: clamp(2rem, 5.5vmin, 4.2rem);
+            font-weight: 700;
+            line-height: 1.25;
+            max-width: 1050px;
+            margin-left: auto;
+            margin-right: auto;
+            margin-bottom: 0.6em;
+        }
+
+        .trivia-answer-box {
+            background: rgba(255,255,255,0.04);
+            border: 2px solid rgba(201,168,76,0.2);
+            border-radius: 16px;
+            padding: 1.2em 2em;
+            max-width: 950px;
+            margin: 0 auto;
+            min-height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.6s ease;
+        }
+        .trivia-answer-box.revealed {
+            border-color: var(--gold);
+            background: rgba(201,168,76,0.08);
+        }
+        .trivia-answer-box .answer-icon {
+            font-size: clamp(1.8rem, 3.5vmin, 2.8rem);
+            color: var(--gold);
+            margin-right: 0.5em;
+            opacity: 0;
+            transition: opacity 0.5s;
+            flex-shrink: 0;
+        }
+        .trivia-answer-box.revealed .answer-icon { opacity: 1; }
+
+        .trivia-a {
+            font-size: clamp(1.5rem, 3.8vmin, 2.8rem);
+            color: var(--gold-light);
+            font-weight: 600;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+        .trivia-answer-box.revealed .trivia-a {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .trivia-timer-bar {
+            width: 200px;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            margin: 1em auto 0;
+            overflow: hidden;
+        }
+        .trivia-timer-fill {
+            height: 100%;
+            background: var(--gold);
+            border-radius: 3px;
+            width: 0%;
+            transition: width 0.3s linear;
+        }
+        .trivia-hint {
+            font-size: clamp(0.7rem, 1.5vmin, 1rem);
+            color: rgba(255,255,255,0.3);
+            margin-top: 0.5em;
+        }
+
+        /* ============ PHOTO SLIDE ============ */
+        .photo-frame {
+            position: relative;
+            max-width: 70vw;
+            max-height: 58vh;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 4px solid var(--gold);
+            box-shadow: 0 20px 80px rgba(0,0,0,0.6), 0 0 60px rgba(201,168,76,0.1);
+            margin-bottom: 0.8em;
+        }
+        .photo-frame img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            max-height: 53vh;
+            object-fit: contain;
+            background: #111;
+        }
+        .photo-caption {
+            font-size: clamp(1.5rem, 3.5vmin, 2.6rem);
+            color: #fff;
+            font-weight: 600;
+            margin-top: 0.3em;
+        }
+        .photo-credit {
+            font-size: clamp(0.8rem, 1.5vmin, 1.1rem);
+            color: rgba(255,255,255,0.4);
+            margin-top: 0.2em;
+        }
+
+        /* ============ STAT / FACT CARDS ============ */
+        .fact-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.5em;
+            max-width: 1200px;
+            width: 100%;
+        }
+        .fact-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(201,168,76,0.2);
+            border-radius: 16px;
+            padding: 1.8em 1.3em;
+            text-align: center;
+            transition: transform 0.4s, border-color 0.4s;
+        }
+        .fact-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--gold);
+        }
+        .fact-card i {
+            font-size: clamp(2.2rem, 5vmin, 3.8rem);
+            color: var(--gold);
+            margin-bottom: 0.3em;
+        }
+        .fact-card h3 {
+            font-size: clamp(1.4rem, 3vmin, 2.2rem);
+            margin-bottom: 0.3em;
+        }
+        .fact-card p {
+            font-size: clamp(1.1rem, 2.5vmin, 1.6rem);
+            color: rgba(255,255,255,0.7);
+            line-height: 1.5;
+        }
+
+        .stat-big {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(3.5rem, 10vmin, 8rem);
+            font-weight: 900;
+            color: var(--gold);
+            line-height: 1;
+        }
+        .stat-label {
+            font-size: clamp(1.2rem, 2.8vmin, 2rem);
+            color: rgba(255,255,255,0.7);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-top: 0.3em;
+        }
+
+        /* ============ TIMELINE (single-slide friendly) ============ */
+        .timeline-entries {
+            text-align: left;
+            max-width: 1000px;
+            width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .tl-entry {
+            display: flex;
+            gap: 1em;
+            align-items: flex-start;
+            padding: 0.6em 0;
+            border-bottom: 1px solid rgba(201,168,76,0.12);
+        }
+        .tl-year {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(1.3rem, 3vmin, 2rem);
+            font-weight: 700;
+            color: var(--gold);
+            min-width: 130px;
+            flex-shrink: 0;
+        }
+        .tl-text {
+            font-size: clamp(1.2rem, 2.8vmin, 1.8rem);
+            color: rgba(255,255,255,0.85);
+            line-height: 1.4;
+        }
+
+        /* ============ STEPS / TRADITIONS LARGE ============ */
+        .step-big-num {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(6rem, 18vmin, 14rem);
+            font-weight: 900;
+            color: var(--gold);
+            line-height: 1;
+            opacity: 0.12;
+            position: absolute;
+            top: 50%;
+            left: 5%;
+            transform: translateY(-50%);
+        }
+        .step-text-big {
+            font-size: clamp(1.8rem, 4.5vmin, 3.2rem);
+            line-height: 1.4;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+            font-weight: 300;
+            position: relative;
+            z-index: 2;
+        }
+        .step-label {
+            font-size: clamp(1rem, 2.2vmin, 1.5rem);
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            color: var(--gold);
+            font-weight: 700;
+            margin-bottom: 0.6em;
+        }
+
+        /* ============ ENTRANCE ANIMATIONS ============ */
+        .anim-enter {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+        .slide.active .anim-enter {
+            opacity: 1;
+            transform: translateY(0);
+            transition-delay: 0.5s; /* wait for parent fade to become visible */
+        }
+        .slide.active .anim-enter:nth-child(2) { transition-delay: 0.65s; }
+        .slide.active .anim-enter:nth-child(3) { transition-delay: 0.8s; }
+        .slide.active .anim-enter:nth-child(4) { transition-delay: 0.95s; }
+        .slide.active .anim-enter:nth-child(5) { transition-delay: 1.1s; }
+
+        /* ============ FOOTER STRIP ============ */
+        .kiosk-footer {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, var(--gold), transparent);
+            opacity: 0.4;
+            z-index: 50;
+        }
+
+        /* ============ RESPONSIVE ============ */
+        @media (max-width: 768px) {
+            .slide { padding: 30px 24px; }
+            .photo-frame { max-width: 90vw; }
+            .fact-grid { grid-template-columns: 1fr; }
+            .step-big-num { font-size: 5rem; left: 2%; }
+            .tl-entry { flex-direction: column; gap: 0.2em; }
+            .tl-year { min-width: auto; }
+        }
+
+        @media print {
+            .slide { position: relative !important; opacity: 1 !important; page-break-after: always; }
+            #timerRing, .particles, .kiosk-footer { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Timer ring (bottom center) -->
+    <div id="timerRing">
+        <svg viewBox="0 0 50 50">
+            <circle class="ring-bg" cx="25" cy="25" r="22"/>
+            <circle class="ring-fill" id="ringFill" cx="25" cy="25" r="22"/>
+        </svg>
+    </div>
+
+    <!-- Fullscreen button (bottom-right corner) -->
+    <button type="button" id="fsBtn" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">
+        <i class="bi bi-arrows-fullscreen" id="fsIcon"></i>
+    </button>
+
+    <!-- Bottom gold accent -->
+    <div class="kiosk-footer"></div>
+
+    <!-- Kiosk container — slides injected here by JS -->
+    <div id="kiosk"></div>
+
+
+    <script>
+    /* =================================================================
+       =================================================================
+       MAINTAINER CONFIGURATION
+       =================================================================
+       Scroll down to PHOTO_MANIFEST and CONTENT_SLIDES to add/edit.
+       Quiz questions are loaded from qa_library.csv automatically.
+       =================================================================
+       ================================================================= */
+
+    /**
+     * PHOTO MANIFEST
+     * ---------------------------------------------------------------
+     * To add a new photo:
+     *  1. Drop the image into the "photos/" folder.
+     *  2. Add an entry here: { file, caption, credit }
+     *  3. It will automatically appear as a random slide!
+     */
+    const PHOTO_MANIFEST = [
+        {
+            file:    "photos/bill_wilson_portrait.jpg",
+            caption: "Bill Wilson (Bill W.) — Co-Founder of Alcoholics Anonymous",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/dr_bobs_house_akron.jpg",
+            caption: "Dr. Bob's House — 855 Ardmore Ave, Akron, Ohio — Where AA Began",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/stepping_stones_katonah.jpg",
+            caption: "Stepping Stones — Bill & Lois Wilson's Home in Katonah, NY",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/aa_big_book.jpg",
+            caption: "The Big Book — Alcoholics Anonymous — First Published 1939",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/mayflower_hotel_akron.jpg",
+            caption: "Mayflower Hotel, Akron — Where Bill W. Made the Call That Led to Dr. Bob",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/bill_wilson_gravestone.jpg",
+            caption: "Bill Wilson's Gravestone — East Dorset, Vermont",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/william_griffith_wilson_birthplace.jpg",
+            caption: "Bill W.'s Birthplace — East Dorset, Vermont (Born November 26, 1895)",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/historical_marker_bill_wilson_birthplace.jpg",
+            caption: "Historical Marker — Bill Wilson Birthplace, East Dorset, Vermont",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/historical_marker_bill_wilson_02.jpg",
+            caption: "Bill Wilson Birthplace Historical Marker — East Dorset, VT",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/wilson_house_east_dorset_vt.jpg",
+            caption: "Wilson House — East Dorset, Vermont — Bill W.'s Childhood Home",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/wilson_house_east_dorset_2025.jpg",
+            caption: "Wilson House — Now a Recovery Residence and Historic Site",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/wilson_birthplace_east_dorset_vt.jpg",
+            caption: "East Dorset, Vermont — Where Bill W.'s Story Began",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/edward_dowling.jpg",
+            caption: "Father Edward Dowling, S.J. — Bill W.'s Spiritual Advisor",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/father_edward_dowling.jpg",
+            caption: "Fr. Dowling — Called Bill W.'s Spiritual Experience 'the Real Thing'",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/aa_intergroup_facade_akron.jpg",
+            caption: "AA Intergroup Office — Akron, Ohio — Birthplace of AA",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/frank_buchman_oxford_group.jpg",
+            caption: "Frank Buchman — Founder of the Oxford Group That Influenced Early AA",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/man_on_bed_stained_glass_akron.jpg",
+            caption: "The Man on the Bed — Stained Glass Tribute, Akron",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/dr_bobs_house_01.jpg",
+            caption: "Dr. Bob's House — Interior View — Akron, Ohio",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/dr_bobs_house_02.jpg",
+            caption: "Dr. Bob's House — Another View of the Historic Home",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/dr_bobs_house_03.jpg",
+            caption: "Dr. Bob's House — Where Bill W. Stayed in Summer 1935",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/dr_bobs_house_exterior.jpg",
+            caption: "Dr. Bob's House Exterior — Now a Museum and Historic Site",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/proposed_titles_big_book_akron.jpg",
+            caption: "Proposed Titles for the Big Book — Akron Archives Display",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/st_thomas_hospital_chapel_akron.jpg",
+            caption: "St. Thomas Hospital Chapel — Where Sister Ignatia Served, Akron",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/twelve_steps_exhibit_akron.jpg",
+            caption: "The Twelve Steps — Historical Exhibit, Akron",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/aa_family_tree_green_mountain.jpg",
+            caption: "AA Family Tree — Green Mountain, Vermont",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/aa_grapevine_greenfield_ma.jpg",
+            caption: "AA Grapevine Office — 'Our Meeting in Print' Since 1944",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/aa_intergroup_tour_guide_akron.jpg",
+            caption: "AA Intergroup Tour — Akron, Ohio — Birthplace of AA",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/aa_intergroup_window_akron.jpg",
+            caption: "AA Intergroup Window Display — Akron, Ohio",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/aa_material_wilson_house.jpg",
+            caption: "AA Historical Materials — Wilson House, East Dorset, VT",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/aa_regional_service_center_nyc.jpg",
+            caption: "AA Regional Service Center — New York City",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/alano_society_minneapolis.jpg",
+            caption: "Alano Society — AA Clubhouse, Minneapolis",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/calumet_bldg_aa_plaque_newark.jpg",
+            caption: "Historical AA Plaque — Calumet Building, Newark",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/dr_bobs_house_10.jpg",
+            caption: "Inside Dr. Bob's House — Where the First AA Members Gathered",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/dr_bobs_house_20.jpg",
+            caption: "Dr. Bob's House Interior — Preserved as It Was in the 1930s",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/dr_bobs_house_30.jpg",
+            caption: "Dr. Bob's House — A Window Into AA's Earliest Days",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/dutch_aa_meeting_1960s.jpg",
+            caption: "Dutch AA Meeting — 1960s — AA's International Reach",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/enduring_strength_sobriety_token.jpg",
+            caption: "Sobriety Token — Symbol of Enduring Strength in Recovery",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/serenity_prayer_sign.jpg",
+            caption: "The Serenity Prayer — 'God Grant Me the Serenity...'",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/sobriety_coin_36_year.jpg",
+            caption: "36-Year Sobriety Coin — One Day at a Time",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/sobriety_medallion.jpg",
+            caption: "Sobriety Medallion — A Tradition Started by Sister Ignatia",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/stepping_stones_katonah_ny.jpg",
+            caption: "Stepping Stones — National Historic Landmark, Katonah, NY",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/wilson_house_east_dorset_2023.jpg",
+            caption: "Wilson House — East Dorset, Vermont — A Place of Pilgrimage",
+            credit:  "Public Domain — Wikimedia Commons"
+        },
+        {
+            file:    "photos/serenity_prayer_calligraphy.jpg",
+            caption: "The Serenity Prayer — 'God Grant Me the Serenity...'",
+            credit:  "Rowlett Group AA Archives"
+        },
+        {
+            file:    "photos/lords_prayer_art.jpg",
+            caption: "The Lord's Prayer — Recited at Many AA Meetings",
+            credit:  "Rowlett Group AA Archives"
+        },
+        {
+            file:    "photos/rowlett_group_30th_anniversary.jpg",
+            caption: "Rowlett Group — 30th Anniversary Celebration",
+            credit:  "Rowlett Group AA Archives"
+        },
+        // --- STAN HYWET HALL (where Bill met Dr Bob) ---
+        { file: "photos/stan_hywet_hall_exterior_01.jpg", caption: "Stan Hywet Hall — Akron, Ohio — Where Bill W. Met Dr. Bob in 1935", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/stan_hywet_hall_exterior_02.jpg", caption: "Stan Hywet Hall — The Estate Where AA's Story Began", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/stan_hywet_hall_exterior_03.jpg", caption: "Stan Hywet Hall — Henrietta Seiferling Hosted the Meeting Here", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/stan_hywet_hall_exterior_04.jpg", caption: "Stan Hywet Hall — A National Historic Landmark, Akron", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/stan_hywet_hall_exterior_05.jpg", caption: "Stan Hywet Hall — The Grounds of AA's Birthplace", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/stan_hywet_hall_exterior_06.jpg", caption: "Stan Hywet Hall — Open for Tours Year-Round", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/stan_hywet_hall_gardens_01.jpg", caption: "Stan Hywet Gardens — The Beauty Surrounding AA's First Meeting", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/stan_hywet_hall_interior_01.jpg", caption: "Inside Stan Hywet Hall — Preserved Since the 1930s", credit: "Public Domain — Wikimedia Commons" },
+
+        // --- MAYFLOWER HOTEL (Bill's fateful phone call) ---
+        { file: "photos/mayflower_hotel_canopy_akron.jpg", caption: "Mayflower Hotel Canopy — Where Bill W. Stood on Mother's Day 1935", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/mayflower_hotel_vestibule_akron.jpg", caption: "Mayflower Hotel Vestibule — Bill W. Made His Fateful Call Here", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/mayflower_hotel_cornerstone_akron.jpg", caption: "Mayflower Hotel Cornerstone — A Piece of AA History, Akron", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/mayflower_hotel_main_lobby_akron.jpg", caption: "Mayflower Hotel Main Lobby — Where Bill W. Chose Sobriety Over a Drink", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/mayflower_hotel_elevator_lobby_akron.jpg", caption: "Mayflower Hotel Elevator Lobby — Akron, Ohio", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/mayflower_hotel_lobby_staircase_akron.jpg", caption: "Mayflower Hotel Grand Staircase — Akron", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/mayflower_hotel_ground_floor_akron.jpg", caption: "Mayflower Hotel Ground Floor — Akron, Ohio", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/mayflower_hotel_exterior_02_akron.jpg", caption: "Mayflower Hotel Exterior — An Akron Landmark in AA History", credit: "Public Domain — Wikimedia Commons" },
+
+        // --- BILL W., DR. BOB, LOIS WILSON ---
+        { file: "photos/bill_w_time_magazine.png", caption: "Bill W. — Time Magazine, 1971 — One of the 100 Most Important People of the 20th Century", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/dr_bob_smith_gravesite_mount_peace.jpg", caption: "Dr. Bob Smith's Gravesite — Mount Peace Cemetery, Akron, Ohio", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/lois_wilson_headstone_east_dorset.jpg", caption: "Lois Wilson's Headstone — East Dorset, Vermont — Co-Founder of Al-Anon", credit: "Public Domain — Wikimedia Commons" },
+
+        // --- AKRON CITY HOSPITAL ---
+        { file: "photos/akron_city_hospital.jpg", caption: "Akron City Hospital — Where Dr. Bob Treated Early AA Members", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/akron_city_hospital_historic.jpg", caption: "Akron City Hospital — Historic View — Where Bill Dotson (AA #3) Got Sober", credit: "Public Domain — Wikimedia Commons" },
+
+        // --- OXFORD GROUP ---
+        { file: "photos/frank_buchman_portrait_cropped.jpg", caption: "Frank Buchman — Founder of the Oxford Group That Influenced AA", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/frank_buchman_closeup.jpg", caption: "Frank Buchman — The Oxford Group's Principles Shaped AA's Steps", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/frank_buchman_loc_portrait.jpg", caption: "Frank Buchman — Library of Congress Portrait", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/oxford_group_mra_retreat_house.jpg", caption: "Oxford Group Retreat House — Where Spiritual Principles Were Practiced", credit: "Public Domain — Wikimedia Commons" },
+
+        // --- CALVARY CHURCH (Sam Shoemaker, Oxford Group NYC) ---
+        { file: "photos/calvary_church_nyc_historic.jpg", caption: "Calvary Church, NYC — Sam Shoemaker's Church, Oxford Group Connection to AA", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/calvary_church_nyc_interior.jpg", caption: "Inside Calvary Church, NYC — Where Ebby Thacher Found Sobriety", credit: "Public Domain — Wikimedia Commons" },
+
+        // --- REINHOLD NIEBUHR (Serenity Prayer author) ---
+        { file: "photos/reinhold_niebuhr_1927.jpg", caption: "Reinhold Niebuhr (1927) — Author of the Serenity Prayer", credit: "Public Domain — Wikimedia Commons" },
+
+        // --- SOBRIETY COINS ---
+        { file: "photos/aa_medalj_swedish.jpg", caption: "Swedish AA Sobriety Medallion — AA's Global Reach", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/sobriety_medallion_03.jpg", caption: "Sobriety Medallion — A Tradition Started by Sister Ignatia in 1935", credit: "Public Domain — Wikimedia Commons" },
+
+        // --- AA AWARENESS / MEETINGS ---
+        { file: "photos/aa_awareness.jpg", caption: "AA Awareness — Carrying the Message Worldwide", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/aa_club_harrisonburg_va.jpg", caption: "AA Club — Harrisonburg, Virginia — Fellowship in Action", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/aa_meeting_poster_hyderabad.png", caption: "AA Meeting Poster — Hyderabad, India — AA in 180+ Countries", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/aa_figure_ingolstadt.jpg", caption: "AA Figure — Ingolstadt, Germany — Recovery Knows No Borders", credit: "Public Domain — Wikimedia Commons" },
+
+        // --- TEMPERANCE MOVEMENT (AA's historical roots) ---
+        { file: "photos/murphy_temperance_pledge_card.jpg", caption: "Temperance Pledge Card — The Movement That Preceded AA", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/signing_the_pledge_loc.jpg", caption: "Signing the Pledge — Library of Congress — Before AA Existed", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/american_pledge_against_liquors.jpg", caption: "American Pledge Against Liquors — A Pre-AA Attempt at Recovery", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/washingtonian_hall_temperance.jpg", caption: "Washingtonian Hall — Early Temperance Movement Meeting Place", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/band_of_hope_temperance_pledge.jpg", caption: "Band of Hope Temperance Pledge — A Predecessor to AA's Approach", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/nz_total_abstinence_pledge.jpg", caption: "New Zealand Total Abstinence Pledge — Global Temperance Movement", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/maine_wctu_pledge_card.jpg", caption: "Maine WCTU Pledge Card — Women Led the Temperance Fight", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/temperance_prohibition_poster_01.jpg", caption: "Temperance Poster — 'The Drunkard's Progress' Era", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/temperance_prohibition_poster_02.jpg", caption: "Prohibition-Era Temperance Poster — Before AA Offered a Better Way", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/temperance_prohibition_poster_03.jpg", caption: "Temperance Movement Poster — The World Before AA", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/temperance_brandy_drops.png", caption: "Temperance-Era 'Brandy Drops' — Alcohol Was Everywhere Before AA", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/prohibition_pledge_cartoon_1914.jpg", caption: "Prohibition Pledge Cartoon, 1914 — Pledges Didn't Work; AA Did", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/temperance_medals_demorest_wctu_1907.png", caption: "Temperance Medals (1907) — Predecessors to AA Sobriety Coins", credit: "Public Domain — Wikimedia Commons" },
+
+        // --- WCTU / CARRY NATION ---
+        { file: "photos/wctu_weston_vermont_1884.jpg", caption: "WCTU Meeting, Weston, Vermont (1884) — Women's Temperance Movement", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/wctu_convention_1911.jpg", caption: "WCTU Convention, 1911 — The Organized Fight Against Alcohol", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/wctu_cartoon.jpg", caption: "WCTU Editorial Cartoon — The Temperance Era", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/wctu_prohibition_posters_1922.png", caption: "WCTU Prohibition Posters, 1922 — Laws Didn't Cure Alcoholism; AA Did", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/wctu_young_peoples_field_day_1924.png", caption: "WCTU Young People's Field Day, 1924 — Temperance Was a Mass Movement", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/carry_nation_hatchet_bible.jpg", caption: "Carry Nation — Hatchet & Bible — The Fiery Temperance Crusader", credit: "Public Domain — Wikimedia Commons" },
+        { file: "photos/carrie_nation_portrait.jpg", caption: "Carrie Nation — Before AA, Prohibition Was the Only Answer", credit: "Public Domain — Wikimedia Commons" },
+
+        // ← Add more photos here! Drop image in photos/ folder and add entry above.
+    ];
+
+    /**
+     * CONTENT SLIDES
+     * ---------------------------------------------------------------
+     * Each object defines one slide. Types:
+     *   "hero"      — big title slide
+     *   "quote"     — featured quote
+     *   "story"     — heading + body paragraph
+     *   "stats"     — array of stat cards
+     *   "facts"     — icon cards grid
+     *   "timeline"  — date/event list
+     *   "step"      — one Step or Tradition featured big
+     *   "list"      — heading + bullet list
+     *
+     * These get shuffled into the random pool alongside trivia and photos.
+     * Add as many as you like!
+     */
+    const CONTENT_SLIDES = [
+        // ---- HERO SLIDES ----
+        {
+            type: "hero",
+            title: "AA Area <gold>Archives</gold>",
+            subtitle: "Preserving Our History  •  Carrying the Message  •  Serving the Fellowship",
+            footnote: "Welcome to the Archives Table"
+        },
+        {
+            type: "hero",
+            title: "Our <gold>History</gold> Matters",
+            subtitle: "Those who do not remember the past are condemned to repeat it.",
+            footnote: "— George Santayana (often quoted by Bill W.)"
+        },
+        {
+            type: "hero",
+            title: "<gold>Love</gold> & Service",
+            subtitle: "Dr. Bob's parting words to the fellowship at the 1950 International Convention",
+            footnote: "The heart of AA's message"
+        },
+
+        // ---- QUOTE SLIDES ----
+        {
+            type: "quote",
+            badge: "Big Book, p. 164",
+            text: "We shall be with you in the Fellowship of the Spirit, and you will surely meet some of us as you trudge the Road of Happy Destiny.",
+            attr: "— Alcoholics Anonymous"
+        },
+        {
+            type: "quote",
+            badge: "Big Book, p. 85",
+            text: "What we really have is a daily reprieve contingent on the maintenance of our spiritual condition.",
+            attr: "— Alcoholics Anonymous"
+        },
+        {
+            type: "quote",
+            badge: "Bill W.",
+            text: "The spark that was to flare into the first AA group was struck at Akron on June 10, 1935.",
+            attr: "— AA Comes of Age, p. 144"
+        },
+        {
+            type: "quote",
+            badge: "Tradition Twelve",
+            text: "Anonymity is the spiritual foundation of all our Traditions, ever reminding us to place principles before personalities.",
+            attr: "— The Twelve Traditions"
+        },
+        {
+            type: "quote",
+            badge: "Dr. Bob",
+            text: "Let us also remember to guard that erring member — the tongue — and if we must use it, let's use it with kindness and love and tolerance.",
+            attr: "— Dr. Bob's last major talk, 1950"
+        },
+        {
+            type: "quote",
+            badge: "Responsibility Declaration",
+            text: "I am responsible. When anyone, anywhere, reaches out for help, I want the hand of AA always to be there. And for that: I am responsible.",
+            attr: "— Adopted at the 1965 International Convention"
+        },
+        {
+            type: "quote",
+            badge: "Big Book, p. 58",
+            text: "Rarely have we seen a person fail who has thoroughly followed our path.",
+            attr: "— How It Works"
+        },
+        {
+            type: "quote",
+            badge: "Big Book, p. 83",
+            text: "We will not regret the past nor wish to shut the door on it.",
+            attr: "— The Promises"
+        },
+
+        // ---- STORY SLIDES ----
+        {
+            type: "story",
+            badge: "The Beginning",
+            heading: "How It All Began",
+            body: "In the depths of the Great Depression, two hopeless alcoholics found each other. Bill Wilson, a failed Wall Street stockbroker, and Dr. Robert Smith, an Akron surgeon, discovered that by sharing their experience, they could stay sober — one day at a time."
+        },
+        {
+            type: "story",
+            badge: "June 10, 1935",
+            heading: "The Day AA Was Born",
+            body: "Bill W. and Dr. Bob met at the home of Henrietta Seiferling in Akron, Ohio. What was supposed to be a 15-minute conversation lasted over six hours. This date is now recognized as the founding date of Alcoholics Anonymous."
+        },
+        {
+            type: "story",
+            badge: "The Big Book",
+            heading: "Our Basic Text",
+            body: "First published April 10, 1939, 'Alcoholics Anonymous' — the Big Book — has sold over 40 million copies in 70+ languages. Its first 164 pages remain unchanged since 1939. It was printed on thick paper to look worth the $3.50 price tag."
+        },
+        {
+            type: "story",
+            badge: "Carrying the Message",
+            heading: "One Alcoholic Helping Another",
+            body: "The foundation of AA's program is simple: one alcoholic sharing their experience with another. This principle — that helping others helps us stay sober — is the spiritual core that has kept the fellowship alive for nearly 90 years."
+        },
+        {
+            type: "story",
+            badge: "December 11, 1934",
+            heading: "Bill's Spiritual Experience",
+            body: "During his fourth stay at Towns Hospital in New York City, Bill Wilson cried out: 'If there is a God, let Him show Himself!' He then had a profound spiritual experience that led to his permanent sobriety and ultimately to the founding of AA."
+        },
+        {
+            type: "story",
+            badge: "The Oxford Group",
+            heading: "AA's Spiritual Roots",
+            body: "Both Bill W. and Dr. Bob were members of the Oxford Group, a Christian fellowship movement. AA eventually separated — New York in 1937, Akron in 1939 — to become its own fellowship, but the Oxford Group's principles deeply influenced the Twelve Steps."
+        },
+        {
+            type: "story",
+            badge: "1941",
+            heading: "AA Goes National",
+            body: "Jack Alexander's article in The Saturday Evening Post brought AA into the national spotlight. Membership surged from 2,000 to 8,000 almost overnight. For the first time, alcoholics across America learned there was hope."
+        },
+        {
+            type: "story",
+            badge: "Archives",
+            heading: "Why Archives Matter",
+            body: "The Archives Committee collects, preserves, and shares the history of AA. Old meeting directories, photographs, recordings, and personal stories — these materials help today's members understand where AA came from and carry our legacy forward."
+        },
+        {
+            type: "story",
+            badge: "Service",
+            heading: "Get Involved!",
+            body: "You can help the Archives! Donate old AA materials, record oral histories, volunteer with the committee, or become your group's Archives contact. Speak with any Archives member at this booth to learn more."
+        },
+
+        // ---- STAT SLIDES ----
+        {
+            type: "stats",
+            badge: "AA Today",
+            heading: "By the Numbers",
+            items: [
+                { value: "123,000+", label: "Groups Worldwide" },
+                { value: "180+", label: "Countries" },
+                { value: "2 Million+", label: "Members" },
+                { value: "89 Years", label: "Of Service" }
+            ]
+        },
+        {
+            type: "stats",
+            badge: "The Big Book",
+            heading: "Incredible Reach",
+            items: [
+                { value: "40M+", label: "Copies Sold" },
+                { value: "70+", label: "Languages" },
+                { value: "4", label: "Editions Published" },
+                { value: "$3.50", label: "Original Price" }
+            ]
+        },
+
+        // ---- FACT CARD SLIDES ----
+        {
+            type: "facts",
+            badge: "The Co-Founders",
+            heading: "Bill W. & Dr. Bob",
+            items: [
+                { icon: "bi-person-circle", title: "Bill W.", text: "Born 1895 in Vermont. Wall Street stockbroker. Sober Dec 11, 1934. Primary author of the Big Book and Twelve Steps." },
+                { icon: "bi-person-circle", title: "Dr. Bob", text: "Born 1879 in Vermont. Akron surgeon. Sober June 10, 1935. His final words to AA: 'Love and Service.'" }
+            ]
+        },
+        {
+            type: "facts",
+            badge: "Our Purpose",
+            heading: "The Archives Mission",
+            items: [
+                { icon: "bi-collection", title: "Collect", text: "Documents, photos, recordings, and memorabilia that tell the story of AA." },
+                { icon: "bi-safe", title: "Preserve", text: "Carefully catalog and store materials so they survive for future generations." },
+                { icon: "bi-share", title: "Share", text: "Through displays and events like this one, we make history accessible to all." }
+            ]
+        },
+        {
+            type: "facts",
+            badge: "Service Structure",
+            heading: "How AA Works",
+            items: [
+                { icon: "bi-people", title: "GSR", text: "General Service Representative — your group's link to AA as a whole." },
+                { icon: "bi-diagram-3", title: "DCM", text: "District Committee Member — the link between groups and the Area." },
+                { icon: "bi-building", title: "GSO", text: "General Service Office in New York City — serving AA groups worldwide." }
+            ]
+        },
+        {
+            type: "facts",
+            badge: "Volunteer",
+            heading: "How You Can Help",
+            items: [
+                { icon: "bi-gift", title: "Donate Materials", text: "Old directories, photos, group histories, speaker recordings, early literature." },
+                { icon: "bi-mic", title: "Record History", text: "Help capture oral histories from long-time members before their stories are lost." },
+                { icon: "bi-hand-index-thumb", title: "Join the Committee", text: "Volunteer with the Archives Committee — every hand matters." }
+            ]
+        },
+
+        // ---- TIMELINE SLIDE ----
+        {
+            type: "timeline",
+            badge: "Key Dates",
+            heading: "AA Timeline",
+            items: [
+                { year: "Dec 1934", text: "Bill W.'s last drink. Spiritual experience at Towns Hospital." },
+                { year: "Jun 1935", text: "Bill W. meets Dr. Bob in Akron — AA is born." },
+                { year: "Apr 1939", text: "The Big Book is published. 4,585 copies printed." },
+                { year: "Mar 1941", text: "Saturday Evening Post article — AA goes national." },
+                { year: "Jul 1950", text: "First International Convention. Traditions adopted." },
+                { year: "Apr 1951", text: "First General Service Conference." }
+            ]
+        },
+        {
+            type: "timeline",
+            badge: "AA Literature",
+            heading: "Publication Timeline",
+            items: [
+                { year: "1939", text: "Alcoholics Anonymous (Big Book) — 1st Edition" },
+                { year: "1944", text: "AA Grapevine — 'Our Meeting in Print'" },
+                { year: "1953", text: "Twelve Steps and Twelve Traditions" },
+                { year: "1967", text: "As Bill Sees It" },
+                { year: "1975", text: "Living Sober" },
+                { year: "1990", text: "Daily Reflections" }
+            ]
+        },
+
+        // ---- INDIVIDUAL STEP SLIDES ----
+        { type: "step", badge: "The Twelve Steps", label: "Step One", num: "1", text: "We admitted we were powerless over alcohol — that our lives had become unmanageable." },
+        { type: "step", badge: "The Twelve Steps", label: "Step Two", num: "2", text: "Came to believe that a Power greater than ourselves could restore us to sanity." },
+        { type: "step", badge: "The Twelve Steps", label: "Step Three", num: "3", text: "Made a decision to turn our will and our lives over to the care of God as we understood Him." },
+        { type: "step", badge: "The Twelve Steps", label: "Step Four", num: "4", text: "Made a searching and fearless moral inventory of ourselves." },
+        { type: "step", badge: "The Twelve Steps", label: "Step Five", num: "5", text: "Admitted to God, to ourselves, and to another human being the exact nature of our wrongs." },
+        { type: "step", badge: "The Twelve Steps", label: "Step Six", num: "6", text: "Were entirely ready to have God remove all these defects of character." },
+        { type: "step", badge: "The Twelve Steps", label: "Step Seven", num: "7", text: "Humbly asked Him to remove our shortcomings." },
+        { type: "step", badge: "The Twelve Steps", label: "Step Eight", num: "8", text: "Made a list of all persons we had harmed, and became willing to make amends to them all." },
+        { type: "step", badge: "The Twelve Steps", label: "Step Nine", num: "9", text: "Made direct amends to such people wherever possible, except when to do so would injure them or others." },
+        { type: "step", badge: "The Twelve Steps", label: "Step Ten", num: "10", text: "Continued to take personal inventory and when we were wrong promptly admitted it." },
+        { type: "step", badge: "The Twelve Steps", label: "Step Eleven", num: "11", text: "Sought through prayer and meditation to improve our conscious contact with God as we understood Him." },
+        { type: "step", badge: "The Twelve Steps", label: "Step Twelve", num: "12", text: "Having had a spiritual awakening as the result of these Steps, we tried to carry this message to alcoholics, and to practice these principles in all our affairs." },
+
+        // ---- INDIVIDUAL TRADITION SLIDES ----
+        { type: "step", badge: "The Twelve Traditions", label: "Tradition One", num: "1", text: "Our common welfare should come first; personal recovery depends upon AA unity." },
+        { type: "step", badge: "The Twelve Traditions", label: "Tradition Two", num: "2", text: "For our group purpose there is but one ultimate authority — a loving God as He may express Himself in our group conscience." },
+        { type: "step", badge: "The Twelve Traditions", label: "Tradition Three", num: "3", text: "The only requirement for AA membership is a desire to stop drinking." },
+        { type: "step", badge: "The Twelve Traditions", label: "Tradition Four", num: "4", text: "Each group should be autonomous except in matters affecting other groups or AA as a whole." },
+        { type: "step", badge: "The Twelve Traditions", label: "Tradition Five", num: "5", text: "Each group has but one primary purpose — to carry its message to the alcoholic who still suffers." },
+        { type: "step", badge: "The Twelve Traditions", label: "Tradition Six", num: "6", text: "An AA group ought never endorse, finance, or lend the AA name to any related facility or outside enterprise." },
+        { type: "step", badge: "The Twelve Traditions", label: "Tradition Seven", num: "7", text: "Every AA group ought to be fully self-supporting, declining outside contributions." },
+        { type: "step", badge: "The Twelve Traditions", label: "Tradition Eight", num: "8", text: "Alcoholics Anonymous should remain forever nonprofessional, but our service centers may employ special workers." },
+        { type: "step", badge: "The Twelve Traditions", label: "Tradition Nine", num: "9", text: "AA, as such, ought never be organized; but we may create service boards or committees directly responsible to those they serve." },
+        { type: "step", badge: "The Twelve Traditions", label: "Tradition Ten", num: "10", text: "Alcoholics Anonymous has no opinion on outside issues; hence the AA name ought never be drawn into public controversy." },
+        { type: "step", badge: "The Twelve Traditions", label: "Tradition Eleven", num: "11", text: "Our public relations policy is based on attraction rather than promotion; we need always maintain personal anonymity at the level of press, radio, and films." },
+        { type: "step", badge: "The Twelve Traditions", label: "Tradition Twelve", num: "12", text: "Anonymity is the spiritual foundation of all our Traditions, ever reminding us to place principles before personalities." },
+
+        // ---- ADDITIONAL HISTORICAL STORY SLIDES ----
+        {
+            type: "story",
+            badge: "Key Figure",
+            heading: "Dr. William D. Silkworth",
+            body: "Known as 'the little doctor who loved drunks,' Dr. Silkworth treated Bill W. at Towns Hospital. He provided the crucial medical insight that alcoholism is an illness — an allergy of the body coupled with an obsession of the mind. This concept became foundational to AA."
+        },
+        {
+            type: "story",
+            badge: "Key Figure",
+            heading: "Ebby Thacher — Bill's Sponsor",
+            body: "Bill W.'s childhood friend from Vermont visited him in November 1934, sober through the Oxford Group. Ebby's simple message — 'I've got religion' — planted the seed that led to Bill's spiritual awakening. Ebby is considered the first person to carry the AA message."
+        },
+        {
+            type: "story",
+            badge: "Key Figure",
+            heading: "Sister Ignatia Gavin",
+            body: "A Catholic nun at St. Thomas Hospital in Akron, Sister Ignatia worked alongside Dr. Bob to admit and treat thousands of alcoholics when no other hospital would. She gave each departing patient a Sacred Heart medallion — the origin of the AA chip tradition."
+        },
+        {
+            type: "story",
+            badge: "Key Figure",
+            heading: "Lois Wilson — Co-Founder of Al-Anon",
+            body: "Bill W.'s devoted wife stood by him through years of active alcoholism. After Bill got sober, Lois recognized that families of alcoholics also needed support. In 1951, she co-founded Al-Anon Family Groups, which today helps millions of families worldwide."
+        },
+        {
+            type: "story",
+            badge: "Key Figure",
+            heading: "Anne Smith — Mother of AA",
+            body: "Dr. Bob's wife Anne hosted the earliest AA meetings in their Akron home. She kept a spiritual journal that deeply influenced the development of the program. Anne's warmth and devotion earned her the title 'Mother of AA' from early members."
+        },
+        {
+            type: "story",
+            badge: "Key Figure",
+            heading: "Clarence Snyder — Mr. AA of Cleveland",
+            body: "Clarence Snyder founded the first AA group in Cleveland in May 1939 — the third group after Akron and New York. Under his energetic leadership, the Cleveland group grew from a handful of members to hundreds within months, proving AA could scale rapidly."
+        },
+        {
+            type: "story",
+            badge: "Key Figure",
+            heading: "Hank Parkhurst — AA Number Four",
+            body: "A former Standard Oil executive, Hank P. helped Bill W. publish the Big Book. He secured the printer, organized the business side, and was instrumental in getting the book to market. Though he later relapsed, his contribution to AA's founding was immense."
+        },
+        {
+            type: "story",
+            badge: "AA Number Three",
+            heading: "Bill Dotson — The Man on the Bed",
+            body: "In June 1935, Bill W. and Dr. Bob visited Bill Dotson at Akron City Hospital. He was their first joint prospect — and he never drank again. Known as 'AA Number Three,' his story 'The Man on the Bed' appears in every edition of the Big Book."
+        },
+        {
+            type: "story",
+            badge: "Historic Location",
+            heading: "The Mayflower Hotel, Akron",
+            body: "On Mother's Day 1935, Bill W. stood in the lobby of the Mayflower Hotel in Akron, tempted to drink. Instead, he made phone calls seeking another alcoholic to talk to. This desperate act led to his meeting Dr. Bob — and the birth of AA."
+        },
+        {
+            type: "story",
+            badge: "Historic Location",
+            heading: "Dr. Bob's House — 855 Ardmore Avenue",
+            body: "This modest home in Akron, Ohio was where the earliest AA meetings took place. Bill W. lived here with the Smith family for months in 1935. Today it is a museum and pilgrimage site, preserved as it looked during AA's founding days."
+        },
+        {
+            type: "story",
+            badge: "Historic Location",
+            heading: "Stepping Stones — Bill & Lois's Home",
+            body: "Bill and Lois Wilson's home in Bedford Hills, New York, is where much of AA's early literature was written. The property includes 'Wit's End,' Bill's writing studio. Today it is a National Historic Landmark open to visitors."
+        },
+        {
+            type: "story",
+            badge: "Historic Location",
+            heading: "Towns Hospital, New York City",
+            body: "Towns Hospital on Central Park West was where Bill W. had his transformative spiritual experience on December 11, 1934. Under Dr. Silkworth's care, Bill cried out to God and experienced the 'white light' that ended his drinking forever."
+        },
+        {
+            type: "story",
+            badge: "The Big Book",
+            heading: "How the Big Book Got Its Name",
+            body: "When the manuscript was ready for printing, the fellowship chose the thickest stock paper available to make the book look substantial enough to justify its $3.50 price. Members jokingly called it 'the big book' — and the nickname stuck permanently."
+        },
+        {
+            type: "story",
+            badge: "1939",
+            heading: "The First Big Book Printing",
+            body: "Only 4,585 copies were printed in the first run. Sales were painfully slow at first — many copies ended up in a warehouse. Today, fewer than 100 first-edition copies are believed to survive, and a single copy can sell for over $50,000 at auction."
+        },
+        {
+            type: "story",
+            badge: "Rockefeller Connection",
+            heading: "Rockefeller's Wise Refusal",
+            body: "John D. Rockefeller Jr. was so impressed by AA that he hosted a dinner for prominent New Yorkers in 1940. But he wisely declined to give AA large sums, saying 'Money will spoil this thing.' His modest support and endorsement proved more valuable than millions."
+        },
+        {
+            type: "story",
+            badge: "1950",
+            heading: "Dr. Bob's Farewell",
+            body: "At the 1950 International Convention in Cleveland, a visibly ill Dr. Bob gave his final address to the fellowship. His parting words were characteristically simple: 'Let us love one another. Let us remember to practice these principles in all our affairs. Love and Service.' He passed away on November 16, 1950."
+        },
+        {
+            type: "story",
+            badge: "Growth",
+            heading: "AA's Explosive Growth",
+            body: "From two men in 1935, AA grew to 100 members by 1939, 8,000 by 1941, 100,000 by the early 1950s, and over 2 million members worldwide today. It has spread to 180+ countries and the Big Book has been translated into over 70 languages."
+        },
+        {
+            type: "story",
+            badge: "Fun Fact",
+            heading: "Both Founders Were Vermonters",
+            body: "By remarkable coincidence, both co-founders of AA were born in small Vermont towns — Bill W. in East Dorset and Dr. Bob in St. Johnsbury — just 100 miles apart. They wouldn't meet until decades later, in Ohio, through a series of unlikely connections."
+        },
+        {
+            type: "story",
+            badge: "Fun Fact",
+            heading: "The Original Big Book Cover",
+            body: "The first edition Big Book had a yellow cover with a red, yellow, and blue circus-style dust jacket. It was later changed to the iconic blue cover we know today. Bill W. was involved in every detail of the book's production."
+        },
+        {
+            type: "story",
+            badge: "Service",
+            heading: "What Is a GSR?",
+            body: "The General Service Representative (GSR) is the most important link in the chain of AA service. Elected by their home group, the GSR carries the group's conscience to the district and area, ensuring every voice in AA is heard — from the newest member to the oldest."
+        },
+        {
+            type: "story",
+            badge: "Archives",
+            heading: "What Archives Collect",
+            body: "AA Archives preserve oral histories, photographs, meeting directories, group histories, correspondence, speaker recordings, early literature, and memorabilia. If you have old AA materials gathering dust, they could be historically valuable — talk to us!"
+        },
+
+        // ---- ADDITIONAL QUOTE SLIDES ----
+        {
+            type: "quote",
+            badge: "Big Book, p. 25",
+            text: "There is a solution. Almost none of us liked the self-searching, the leveling of our pride, the confession of shortcomings which the process requires for its successful consummation.",
+            attr: "— Alcoholics Anonymous"
+        },
+        {
+            type: "quote",
+            badge: "Big Book, p. 417 (4th Ed.)",
+            text: "Acceptance is the answer to all my problems today. When I am disturbed, it is because I find some person, place, thing, or situation unacceptable to me.",
+            attr: "— Doctor, Alcoholic, Addict"
+        },
+        {
+            type: "quote",
+            badge: "The Promises",
+            text: "We are going to know a new freedom and a new happiness. We will not regret the past nor wish to shut the door on it.",
+            attr: "— Big Book, pp. 83-84"
+        },
+        {
+            type: "quote",
+            badge: "The Promises",
+            text: "No matter how far down the scale we have gone, we will see how our experience can benefit others. That feeling of uselessness and self-pity will disappear.",
+            attr: "— Big Book, pp. 83-84"
+        },
+        {
+            type: "quote",
+            badge: "The Promises",
+            text: "We will suddenly realize that God is doing for us what we could not do for ourselves. Are these extravagant promises? We think not.",
+            attr: "— Big Book, pp. 83-84"
+        },
+        {
+            type: "quote",
+            badge: "Bill W.",
+            text: "We are not cured of alcoholism. What we really have is a daily reprieve contingent on the maintenance of our spiritual condition.",
+            attr: "— Big Book, p. 85"
+        },
+        {
+            type: "quote",
+            badge: "AA Saying",
+            text: "One day at a time.",
+            attr: "— A foundational AA principle"
+        },
+        {
+            type: "quote",
+            badge: "AA Saying",
+            text: "Easy does it — but do it.",
+            attr: "— Popular AA slogan"
+        },
+        {
+            type: "quote",
+            badge: "AA Saying",
+            text: "First things first.",
+            attr: "— AA slogan reminding us of priorities"
+        },
+        {
+            type: "quote",
+            badge: "AA Saying",
+            text: "Let go and let God.",
+            attr: "— Popular AA slogan"
+        },
+        {
+            type: "quote",
+            badge: "AA Saying",
+            text: "Keep it simple.",
+            attr: "— A favorite AA reminder"
+        },
+        {
+            type: "quote",
+            badge: "AA Saying",
+            text: "Progress, not perfection.",
+            attr: "— Big Book, p. 60"
+        },
+        {
+            type: "quote",
+            badge: "AA Saying",
+            text: "This too shall pass.",
+            attr: "— Timeless wisdom shared in meetings"
+        },
+        {
+            type: "quote",
+            badge: "AA Saying",
+            text: "Meeting makers make it.",
+            attr: "— Common AA encouragement"
+        },
+        {
+            type: "quote",
+            badge: "Bill W.",
+            text: "The only requirement for membership is an honest desire to stop drinking. We are not allied with any particular faith, sect, or denomination.",
+            attr: "— Tradition Three"
+        },
+        {
+            type: "quote",
+            badge: "1965 Convention",
+            text: "I am responsible. When anyone, anywhere, reaches out for help, I want the hand of AA always to be there. And for that: I am responsible.",
+            attr: "— The Responsibility Declaration"
+        },
+
+        // ---- ADDITIONAL TIMELINE SLIDES ----
+        {
+            type: "timeline",
+            badge: "Early Years",
+            heading: "The Founding Era",
+            items: [
+                { year: "Nov 1934", text: "Ebby Thacher visits Bill W. — carries the message of sobriety." },
+                { year: "Dec 1934", text: "Bill W.'s spiritual experience at Towns Hospital. His last drink." },
+                { year: "May 1935", text: "Bill W. in Mayflower Hotel lobby, Akron — calls for an alcoholic to talk to." },
+                { year: "Jun 1935", text: "Bill meets Dr. Bob. Dr. Bob has his last drink June 10." },
+                { year: "Jun 1935", text: "Bill Dotson (AA #3) — first person Bill & Bob worked with together." },
+                { year: "1937", text: "New York members separate from the Oxford Group." }
+            ]
+        },
+        {
+            type: "timeline",
+            badge: "Growth Era",
+            heading: "AA Goes Global",
+            items: [
+                { year: "1939", text: "Akron separates from Oxford Group. Big Book published." },
+                { year: "1940", text: "Rockefeller dinner brings national press attention." },
+                { year: "1941", text: "Saturday Evening Post article — membership explodes." },
+                { year: "1944", text: "AA Grapevine begins publication." },
+                { year: "1947", text: "First AA group outside the US — London, England." },
+                { year: "1950", text: "First International Convention. Dr. Bob's farewell address." }
+            ]
+        },
+        {
+            type: "timeline",
+            badge: "Milestones",
+            heading: "Key Moments in AA History",
+            items: [
+                { year: "1951", text: "Lasker Award. Al-Anon founded. First General Service Conference." },
+                { year: "1953", text: "Twelve Steps and Twelve Traditions published." },
+                { year: "1955", text: "Bill W. turns over AA's governance to the fellowship." },
+                { year: "1965", text: "Responsibility Declaration adopted at International Convention." },
+                { year: "1971", text: "Bill W. passes away January 24 in Miami Beach, Florida." },
+                { year: "Today", text: "2 million+ members, 180+ countries, 123,000+ groups worldwide." }
+            ]
+        },
+
+        // ---- ADDITIONAL STAT SLIDES ----
+        {
+            type: "stats",
+            badge: "Historic Firsts",
+            heading: "First Edition Big Book",
+            items: [
+                { value: "4,585", label: "First Printing" },
+                { value: "<100", label: "Surviving Copies" },
+                { value: "$3.50", label: "Original Price" },
+                { value: "$50K+", label: "Auction Value Today" }
+            ]
+        },
+        {
+            type: "stats",
+            badge: "The Founders",
+            heading: "Bill W. & Dr. Bob",
+            items: [
+                { value: "1895", label: "Bill W. Born" },
+                { value: "1879", label: "Dr. Bob Born" },
+                { value: "1935", label: "AA Founded" },
+                { value: "Vermont", label: "Both Born There" }
+            ]
+        },
+
+        // ---- ADDITIONAL FACT CARD SLIDES ----
+        {
+            type: "facts",
+            badge: "AA Literature",
+            heading: "Essential AA Books",
+            items: [
+                { icon: "bi-book", title: "Big Book (1939)", text: "The basic text of AA — 'Alcoholics Anonymous' — over 40 million copies sold." },
+                { icon: "bi-journal-text", title: "12 & 12 (1953)", text: "Twelve Steps and Twelve Traditions — an in-depth companion to the program." },
+                { icon: "bi-calendar-day", title: "Daily Reflections", text: "A book of daily meditations written by AA members, published 1990." }
+            ]
+        },
+        {
+            type: "facts",
+            badge: "Historic Locations",
+            heading: "AA Landmarks",
+            items: [
+                { icon: "bi-house-door", title: "Dr. Bob's House", text: "855 Ardmore Ave, Akron, OH — where earliest AA meetings were held." },
+                { icon: "bi-building", title: "Mayflower Hotel", text: "Akron, OH — where Bill W. made the fateful phone call on Mother's Day 1935." },
+                { icon: "bi-tree", title: "Stepping Stones", text: "Katonah, NY — Bill & Lois Wilson's home, now a National Historic Landmark." }
+            ]
+        },
+        {
+            type: "facts",
+            badge: "Did You Know?",
+            heading: "Surprising AA Facts",
+            items: [
+                { icon: "bi-star", title: "Chip Tradition", text: "Sister Ignatia gave Sacred Heart medallions to patients leaving treatment — the origin of sobriety chips." },
+                { icon: "bi-currency-dollar", title: "Rockefeller's Wisdom", text: "'Money will spoil this thing' — Rockefeller's refusal to over-fund AA helped ensure its independence." },
+                { icon: "bi-clock-history", title: "6-Hour First Meeting", text: "Bill W. and Dr. Bob's first conversation was supposed to last 15 minutes — it lasted over 6 hours." }
+            ]
+        },
+        {
+            type: "facts",
+            badge: "The Promises",
+            heading: "Pages 83-84 of the Big Book",
+            items: [
+                { icon: "bi-sunrise", title: "New Freedom", text: "We are going to know a new freedom and a new happiness." },
+                { icon: "bi-heart", title: "No Regrets", text: "We will not regret the past nor wish to shut the door on it." },
+                { icon: "bi-lightning", title: "God's Work", text: "We will suddenly realize that God is doing for us what we could not do for ourselves." }
+            ]
+        },
+
+        // ---- THE CHAIN OF RECOVERY ----
+        {
+            type: "story",
+            badge: "The Chain",
+            heading: "The Chain of Recovery",
+            body: "Carl Jung told Rowland Hazard that only a 'vital spiritual experience' could save him. Rowland joined the Oxford Group and carried the message to Ebby Thacher, who carried it to Bill Wilson, who carried it to Dr. Bob. Break any link and AA doesn't exist."
+        },
+        {
+            type: "story",
+            badge: "Key Figure",
+            heading: "Rowland Hazard — The First Link",
+            body: "A wealthy Rhode Island industrialist who consulted Carl Jung in Zurich after all other treatments failed. Jung told him medicine couldn't help — only a profound spiritual transformation. Rowland found that experience through the Oxford Group and unknowingly set AA's founding in motion."
+        },
+        {
+            type: "story",
+            badge: "Key Figure",
+            heading: "Ruth Hock — AA's First Secretary",
+            body: "Beginning in January 1936, Ruth Hock worked as Bill W.'s secretary, typing the Big Book manuscript and handling the growing volume of letters from desperate alcoholics. She was the first non-alcoholic to play a vital role in AA's daily operations."
+        },
+        {
+            type: "story",
+            badge: "Key Figure",
+            heading: "Henrietta Seiferling — The Connector",
+            body: "A Vassar graduate and Oxford Group member who was not an alcoholic herself, Henrietta made the single most important introduction in AA history — connecting Bill W. with Dr. Bob on May 12, 1935 at her Gate Lodge on the Stan Hywet estate in Akron."
+        },
+        {
+            type: "story",
+            badge: "1944",
+            heading: "Birth of the AA Grapevine",
+            body: "Six New York AA women launched the Grapevine in June 1944 with a budget of just $187.10. The first issue was 8 pages with 165 subscribers. It was sent to AA groups and armed forces members overseas. Members called it 'our meeting in print' — a name that stuck."
+        },
+        {
+            type: "story",
+            badge: "Fun Fact",
+            heading: "The Library of Congress Honor",
+            body: "The Big Book was named one of 88 Books That Shaped America by the Library of Congress — alongside works by Mark Twain, Ernest Hemingway, and Dr. Seuss. Time Magazine also named it among the 100 best English-language books since 1923."
+        },
+        {
+            type: "story",
+            badge: "Historic Location",
+            heading: "Stan Hywet Gate Lodge — Akron",
+            body: "The Gate Lodge on the Stan Hywet estate at 714 N. Portage Path was where Henrietta Seiferling introduced Bill W. to Dr. Bob on Mother's Day 1935. Today it hosts a special exhibit commemorating this historic meeting. Open to the public for tours."
+        },
+        {
+            type: "story",
+            badge: "1942",
+            heading: "AA Behind Bars",
+            body: "In 1942, the first AA group was formed at San Quentin Prison in California. This marked the beginning of AA's prison ministry, which has since brought the message of recovery to inmates in correctional facilities around the world."
+        },
+        {
+            type: "story",
+            badge: "Fun Fact",
+            heading: "The Sobriety Chip Tradition",
+            body: "Sister Ignatia gave each departing patient a Sacred Heart medallion with the instruction: 'If you want to drink, bring the medallion back first.' This simple practice evolved into today's sobriety chip tradition — the coins given at milestones of 1 month, 3 months, 6 months, and yearly anniversaries."
+        },
+        {
+            type: "story",
+            badge: "Fun Fact",
+            heading: "First AA Clubhouse — 1940",
+            body: "The first dedicated AA meeting space opened at 334½ West 24th Street in New York City in 1940. The opening night drew 100 people — remarkable for a fellowship that had only existed for five years."
+        },
+        {
+            type: "story",
+            badge: "Carl Jung",
+            heading: "The Jung Connection",
+            body: "In 1931, the great psychiatrist Carl Jung told patient Rowland Hazard that medicine could not cure his alcoholism — only a 'vital spiritual experience' could. This insight, passed through a chain of individuals, became the spiritual foundation of AA's entire program."
+        },
+
+        // ---- MORE QUOTES ----
+        {
+            type: "quote",
+            badge: "Bill W.",
+            text: "The willingness to grow is the essence of all spiritual development.",
+            attr: "— Bill Wilson"
+        },
+        {
+            type: "quote",
+            badge: "Dr. Bob",
+            text: "AA is not a plan for recovery that can be finished and done with. It is a way of life, and the challenge contained in its principles is great enough to keep any human being striving for as long as he lives.",
+            attr: "— Dr. Bob Smith"
+        },
+        {
+            type: "quote",
+            badge: "Big Book, p. 60",
+            text: "We are not saints. The point is, that we are willing to grow along spiritual lines. We claim spiritual progress rather than spiritual perfection.",
+            attr: "— How It Works"
+        },
+        {
+            type: "quote",
+            badge: "Bill W.",
+            text: "Sobriety is only a bare beginning; it is only the first gift of the first awakening. If more gifts are to be received, our awakening has to go on.",
+            attr: "— Bill Wilson"
+        },
+        {
+            type: "quote",
+            badge: "Dr. Bob",
+            text: "Our Twelve Steps, when simmered down to the last, resolve themselves into the words love and service.",
+            attr: "— Dr. Bob's farewell talk, 1950"
+        },
+        {
+            type: "quote",
+            badge: "Dr. Bob",
+            text: "Keep it simple. Let's not louse this thing up.",
+            attr: "— Dr. Bob's final advice to Bill W."
+        },
+
+        // ---- MORE FACTS ----
+        {
+            type: "facts",
+            badge: "Did You Know?",
+            heading: "More Surprising AA Facts",
+            items: [
+                { icon: "bi-book-half", title: "Library of Congress", text: "The Big Book is one of 88 Books That Shaped America — a rare honor for a 20th century work." },
+                { icon: "bi-newspaper", title: "Time Magazine", text: "Named among the 100 best English-language books since 1923 by Time Magazine." },
+                { icon: "bi-cash-coin", title: "Grapevine Cost", text: "The first issue of the AA Grapevine cost just $187.10 to produce in June 1944." }
+            ]
+        },
+        {
+            type: "facts",
+            badge: "Women of AA",
+            heading: "Women Who Shaped AA",
+            items: [
+                { icon: "bi-heart", title: "Lois Wilson", text: "Bill's wife, co-founded Al-Anon in 1951. Lived to age 97." },
+                { icon: "bi-house-heart", title: "Anne Smith", text: "Dr. Bob's wife — called 'the spiritual mother of AA.' Hosted first meetings." },
+                { icon: "bi-star", title: "Sister Ignatia", text: "Admitted first alcoholic as medical patient. Created the sobriety chip tradition." }
+            ]
+        },
+        {
+            type: "facts",
+            badge: "The Chain",
+            heading: "How AA Came to Be",
+            items: [
+                { icon: "bi-1-circle", title: "Carl Jung → Rowland", text: "Jung told Hazard only a spiritual experience could save him (1931)." },
+                { icon: "bi-2-circle", title: "Rowland → Ebby", text: "Hazard joined the Oxford Group and carried the message to Ebby Thacher." },
+                { icon: "bi-3-circle", title: "Ebby → Bill → Dr. Bob", text: "Ebby visited Bill in 1934. Bill met Dr. Bob in 1935. AA was born." }
+            ]
+        },
+
+        // ---- FOUNDERS DAY ----
+        {
+            type: "story",
+            badge: "Tradition",
+            heading: "Founders' Day — Every June",
+            body: "Founders' Day is celebrated annually near June 10th — Dr. Bob's sobriety date and the founding date of AA. The largest celebration takes place in Akron, Ohio, attracting thousands of members from around the world for a weekend of history, fellowship, and gratitude."
+        },
+    ];
+
+
+    /* =================================================================
+       TIMING (matches CSS custom properties)
+       ================================================================= */
+    const SLIDE_MS   = 10000;
+    const TRIVIA_MS  = 14000;
+    const REVEAL_MS  = 6000;
+    const PHOTO_MS   = 8000;
+    const FADE_MS    = 1200;
+
+
+    /* =================================================================
+       STATE
+       ================================================================= */
+    let slidePool     = [];   // master shuffled array of slide descriptors
+    let poolIndex     = 0;
+    let triviaData    = [];   // parsed from CSV
+    let currentTimer  = null;
+    let ringInterval  = null;
+    let triviaRevealTimer = null;  // setTimeout for trivia answer reveal
+    let triviaBarInterval = null;  // setInterval for trivia timer bar
+    let currentSlideEl = null;
+    const BG_COUNT    = 8;    // number of bg-N classes
+
+
+    /* =================================================================
+       BOOTSTRAP
+       ================================================================= */
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadTrivia();
+        buildPool();
+        showNext();
+    });
+
+
+    /* =================================================================
+       CSV LOADER
+       ================================================================= */
+    async function loadTrivia() {
+        try {
+            const resp = await fetch('qa_library.csv');
+            const text = await resp.text();
+            triviaData = parseCSV(text);
+        } catch (e) {
+            console.warn('Could not load qa_library.csv:', e);
+        }
+    }
+
+    function parseCSV(text) {
+        const lines = text.trim().split('\n');
+        const headers = csvLine(lines[0]);
+        return lines.slice(1).map(line => {
+            const vals = csvLine(line);
+            const obj = {};
+            headers.forEach((h, i) => obj[h.trim()] = (vals[i] || '').trim());
+            return obj;
+        }).filter(o => o.question);
+    }
+
+    function csvLine(line) {
+        const r = []; let cur = '', q = false;
+        for (let i = 0; i < line.length; i++) {
+            const c = line[i];
+            if (c === '"') { if (q && line[i+1] === '"') { cur += '"'; i++; } else q = !q; }
+            else if (c === ',' && !q) { r.push(cur); cur = ''; }
+            else cur += c;
+        }
+        r.push(cur);
+        return r;
+    }
+
+
+    /* =================================================================
+       BUILD THE RANDOMIZED POOL
+       ================================================================= */
+    function buildPool() {
+        slidePool = [];
+
+        // Add content slides
+        CONTENT_SLIDES.forEach(s => slidePool.push({ kind: 'content', data: s }));
+
+        // Add photo slides (each photo = one slide)
+        PHOTO_MANIFEST.forEach(p => slidePool.push({ kind: 'photo', data: p }));
+
+        // Add trivia slides (all questions as individual slides)
+        triviaData.forEach(q => slidePool.push({ kind: 'trivia', data: q }));
+
+        // Shuffle everything
+        shuffle(slidePool);
+        poolIndex = 0;
+    }
+
+    function shuffle(arr) {
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+    }
+
+
+    /* =================================================================
+       SHOW NEXT SLIDE
+       ================================================================= */
+    function showNext() {
+        // Re-shuffle if we've gone through everything
+        if (poolIndex >= slidePool.length) {
+            shuffle(slidePool);
+            poolIndex = 0;
+        }
+
+        const item = slidePool[poolIndex++];
+        const el   = buildSlideElement(item);
+        const kiosk = document.getElementById('kiosk');
+
+        // Add new slide (hidden)
+        kiosk.appendChild(el);
+
+        // Crossfade
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (currentSlideEl) currentSlideEl.classList.remove('active');
+                el.classList.add('active');
+
+                // Remove old slide after fade
+                const old = currentSlideEl;
+                if (old) {
+                    setTimeout(() => old.remove(), FADE_MS + 100);
+                }
+                currentSlideEl = el;
+            });
+        });
+
+        // Determine timing
+        let duration = SLIDE_MS;
+        if (item.kind === 'trivia') duration = TRIVIA_MS;
+        if (item.kind === 'photo')  duration = PHOTO_MS;
+
+        // Clear any orphan trivia timers from previous slide
+        clearTimeout(triviaRevealTimer);
+        clearInterval(triviaBarInterval);
+        triviaRevealTimer = null;
+        triviaBarInterval = null;
+
+        // Auto-reveal for trivia
+        if (item.kind === 'trivia') {
+            triviaRevealTimer = setTimeout(() => {
+                const box = el.querySelector('.trivia-answer-box');
+                if (box) box.classList.add('revealed');
+            }, REVEAL_MS);
+        }
+
+        // Timer ring animation
+        startRing(duration);
+
+        // Schedule next
+        clearTimeout(currentTimer);
+        currentTimer = setTimeout(showNext, duration);
+    }
+
+
+    /* =================================================================
+       TIMER RING
+       ================================================================= */
+    function startRing(duration) {
+        const ring = document.getElementById('ringFill');
+        const circumference = 2 * Math.PI * 22; // r=22
+        let elapsed = 0;
+        const step = 100;
+
+        ring.style.strokeDashoffset = '0';
+
+        clearInterval(ringInterval);
+        ringInterval = setInterval(() => {
+            elapsed += step;
+            const pct = Math.min(elapsed / duration, 1);
+            ring.style.strokeDashoffset = (circumference * pct).toFixed(2);
+            if (pct >= 1) clearInterval(ringInterval);
+        }, step);
+    }
+
+
+    /* =================================================================
+       SLIDE BUILDERS
+       ================================================================= */
+    function buildSlideElement(item) {
+        const div = document.createElement('div');
+        const bgClass = `bg-${Math.floor(Math.random() * BG_COUNT)}`;
+        div.className = `slide ${bgClass}`;
+
+        // Corner decorations
+        div.innerHTML = `
+            <div class="corner-deco corner-tl"></div>
+            <div class="corner-deco corner-tr"></div>
+            <div class="corner-deco corner-bl"></div>
+            <div class="corner-deco corner-br"></div>
+            <div class="particles"></div>
+        `;
+
+        // Add particles
+        const pContainer = div.querySelector('.particles');
+        for (let i = 0; i < 20; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            p.style.left = Math.random() * 100 + '%';
+            p.style.animationDuration = (8 + Math.random() * 14) + 's';
+            p.style.animationDelay = (Math.random() * 8) + 's';
+            const size = 2 + Math.random() * 4;
+            p.style.width = p.style.height = size + 'px';
+            pContainer.appendChild(p);
+        }
+
+        // Add badge directly to slide (not inside inner/anim-enter)
+        // so it always positions at screen top via slide's position context
+        let badgeText = '';
+        if (item.kind === 'content' && item.data.badge) badgeText = item.data.badge;
+        else if (item.kind === 'photo')  badgeText = 'Historical Photo';
+        else if (item.kind === 'trivia') badgeText = 'Trivia';
+        if (badgeText) {
+            const badge = document.createElement('div');
+            badge.className = 'slide-badge';
+            badge.textContent = badgeText;
+            div.appendChild(badge);
+        }
+
+        // Build inner content based on kind
+        switch (item.kind) {
+            case 'content': buildContentSlide(div, item.data, !!badgeText); break;
+            case 'photo':   buildPhotoSlide(div, item.data);   break;
+            case 'trivia':  buildTriviaSlide(div, item.data);  break;
+        }
+
+        return div;
+    }
+
+
+    /* ----- CONTENT SLIDE ----- */
+    function buildContentSlide(el, data, hasBadge) {
+        const inner = document.createElement('div');
+        inner.style.cssText = 'position:relative;z-index:2;max-width:1100px;width:100%;';
+        if (hasBadge) inner.style.paddingTop = '30px';
+
+        switch (data.type) {
+            case 'hero':
+                inner.innerHTML += `
+                    <div class="anim-enter"><h1 class="mega-title">${data.title}</h1></div>
+                    <div class="anim-enter"><div class="gold-rule"></div></div>
+                    <div class="anim-enter"><p class="big-body" style="margin:0 auto;">${data.subtitle}</p></div>
+                    ${data.footnote ? `<div class="anim-enter"><p style="color:var(--gold);font-size:clamp(1.1rem,2.5vmin,1.6rem);margin-top:0.8em;font-weight:600;">${data.footnote}</p></div>` : ''}
+                `;
+                break;
+
+            case 'quote':
+                inner.innerHTML += `
+                    <div class="anim-enter"><div class="gold-rule"></div></div>
+                    <div class="anim-enter"><p class="big-quote">"${data.text}"</p></div>
+                    <div class="anim-enter"><p class="quote-attr">${data.attr}</p></div>
+                `;
+                break;
+
+            case 'story':
+                inner.innerHTML += `
+                    <div class="anim-enter"><h2 class="big-heading">${data.heading}</h2></div>
+                    <div class="anim-enter"><div class="gold-rule"></div></div>
+                    <div class="anim-enter"><p class="big-body" style="margin:0 auto;">${data.body}</p></div>
+                `;
+                break;
+
+            case 'stats':
+                inner.innerHTML += `<div class="anim-enter"><h2 class="big-heading">${data.heading}</h2><div class="gold-rule"></div></div>`;
+                let statsHtml = '<div class="anim-enter" style="display:flex;flex-wrap:wrap;justify-content:center;gap:2em;margin-top:1em;">';
+                data.items.forEach(s => {
+                    statsHtml += `<div style="text-align:center;min-width:180px;"><div class="stat-big">${s.value}</div><div class="stat-label">${s.label}</div></div>`;
+                });
+                statsHtml += '</div>';
+                inner.innerHTML += statsHtml;
+                break;
+
+            case 'facts':
+                inner.innerHTML += `<div class="anim-enter"><h2 class="big-heading">${data.heading}</h2><div class="gold-rule"></div></div>`;
+                let factsHtml = '<div class="anim-enter"><div class="fact-grid">';
+                data.items.forEach(f => {
+                    factsHtml += `<div class="fact-card"><i class="bi ${f.icon}"></i><h3>${f.title}</h3><p>${f.text}</p></div>`;
+                });
+                factsHtml += '</div></div>';
+                inner.innerHTML += factsHtml;
+                break;
+
+            case 'timeline':
+                inner.innerHTML += `<div class="anim-enter"><h2 class="big-heading">${data.heading}</h2><div class="gold-rule"></div></div>`;
+                let tlHtml = '<div class="anim-enter"><div class="timeline-entries">';
+                data.items.forEach(t => {
+                    tlHtml += `<div class="tl-entry"><span class="tl-year">${t.year}</span><span class="tl-text">${t.text}</span></div>`;
+                });
+                tlHtml += '</div></div>';
+                inner.innerHTML += tlHtml;
+                break;
+
+            case 'step':
+                inner.innerHTML += `
+                    <div class="step-big-num">${data.num}</div>
+                    <div class="anim-enter"><div class="step-label">${data.label}</div></div>
+                    <div class="anim-enter"><p class="step-text-big">${data.text}</p></div>
+                `;
+                break;
+
+            case 'list':
+                inner.innerHTML += `<div class="anim-enter"><h2 class="big-heading">${data.heading}</h2><div class="gold-rule"></div></div>`;
+                let listHtml = '<div class="anim-enter"><ul style="list-style:none;text-align:left;max-width:800px;margin:1em auto 0;">';
+                data.items.forEach(li => {
+                    listHtml += `<li style="padding:0.5em 0;font-size:clamp(1.3rem,2.8vmin,1.8rem);color:rgba(255,255,255,0.85);border-bottom:1px solid rgba(201,168,76,0.12);"><i class="bi bi-check-circle-fill" style="color:var(--gold);margin-right:0.6em;"></i>${li}</li>`;
+                });
+                listHtml += '</ul></div>';
+                inner.innerHTML += listHtml;
+                break;
+        }
+
+        el.appendChild(inner);
+    }
+
+
+    /* ----- PHOTO SLIDE ----- */
+    function buildPhotoSlide(el, data) {
+        const inner = document.createElement('div');
+        inner.style.cssText = 'position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;padding-top:30px;';
+
+        inner.innerHTML = `
+            <div class="anim-enter">
+                <div class="photo-frame">
+                    <img src="${data.file}" alt="${data.caption}" onerror="this.parentElement.innerHTML='<div style=&quot;padding:4em;color:var(--gold)&quot;>Photo not found</div>'">
+                </div>
+            </div>
+            <div class="anim-enter">
+                <div class="photo-caption">${data.caption}</div>
+                <div class="photo-credit">${data.credit}</div>
+            </div>
+        `;
+
+        el.appendChild(inner);
+    }
+
+
+    /* ----- TRIVIA SLIDE ----- */
+    function buildTriviaSlide(el, data) {
+        const diffClass = `diff-${data.difficulty || 'medium'}`;
+        const inner = document.createElement('div');
+        inner.style.cssText = 'position:relative;z-index:2;max-width:1000px;width:100%;padding-top:30px;';
+
+        inner.innerHTML = `
+            <div class="anim-enter">
+                <span class="trivia-category">${data.category || 'General'}</span>
+                <span class="trivia-difficulty ${diffClass}">${data.difficulty || 'medium'}</span>
+            </div>
+            <div class="anim-enter">
+                <h2 class="trivia-q">${data.question}</h2>
+            </div>
+            <div class="anim-enter">
+                <div class="trivia-answer-box">
+                    <i class="bi bi-lightbulb-fill answer-icon"></i>
+                    <div class="trivia-a">${data.answer}</div>
+                </div>
+            </div>
+            <div class="anim-enter">
+                <div class="trivia-timer-bar"><div class="trivia-timer-fill"></div></div>
+                <p class="trivia-hint">Answer reveals automatically</p>
+            </div>
+        `;
+
+        el.appendChild(inner);
+
+        // Animate the trivia timer bar (tracked so it can be cleared on manual advance)
+        requestAnimationFrame(() => {
+            const fill = el.querySelector('.trivia-timer-fill');
+            if (fill) {
+                let elapsed = 0;
+                const step = 100;
+                triviaBarInterval = setInterval(() => {
+                    elapsed += step;
+                    fill.style.width = Math.min((elapsed / REVEAL_MS) * 100, 100) + '%';
+                    if (elapsed >= REVEAL_MS) { clearInterval(triviaBarInterval); triviaBarInterval = null; }
+                }, step);
+            }
+        });
+    }
+
+
+    /* =================================================================
+       FULLSCREEN BUTTON
+       ================================================================= */
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
+    // Wire up the button (stopPropagation so it doesn't also advance the slide)
+    document.getElementById('fsBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFullscreen();
+    });
+
+    // Update icon when fullscreen state changes
+    document.addEventListener('fullscreenchange', () => {
+        const icon = document.getElementById('fsIcon');
+        if (document.fullscreenElement) {
+            icon.className = 'bi bi-fullscreen-exit';
+        } else {
+            icon.className = 'bi bi-arrows-fullscreen';
+        }
+    });
+
+
+    /* =================================================================
+       KEYBOARD SHORTCUTS (for manual control at the booth)
+       ================================================================= */
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        switch (e.key) {
+            case 'ArrowRight':
+            case ' ':
+            case 'PageDown':
+                e.preventDefault();
+                clearTimeout(currentTimer);
+                showNext();
+                break;
+            case 'ArrowLeft':
+            case 'PageUp':
+                e.preventDefault();
+                // Go back: decrement poolIndex by 2 (current was already incremented)
+                poolIndex = Math.max(0, poolIndex - 2);
+                clearTimeout(currentTimer);
+                showNext();
+                break;
+            case 'f':
+            case 'F':
+                toggleFullscreen();
+                break;
+            case 'Escape':
+                // Let browser handle fullscreen exit
+                break;
+        }
+    });
+
+    // Tap/click anywhere to advance (except on the fullscreen button)
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('#fsBtn')) return;
+        clearTimeout(currentTimer);
+        showNext();
+    });
+
+    </script>
+
+    <!--
+    ============================================================
+    MAINTAINER NOTES
+    ============================================================
+
+    This is a FULLY AUTOMATIC, RANDOMIZED kiosk presentation
+    for the AA Area Archives Committee booth at AA events.
+
+    IT RUNS ITSELF — just open the file in a browser and go fullscreen (F key).
+    Every slide (content, photos, trivia) appears in random order and loops forever.
+    Trivia answers auto-reveal after 6 seconds.
+
+    HOW TO ADD PHOTOS:
+      1. Drop image file into "photos/" folder
+      2. Add entry to PHOTO_MANIFEST array in this file
+      3. It will appear as a random slide automatically
+
+    HOW TO ADD QUIZ QUESTIONS:
+      1. Open qa_library.csv in any spreadsheet app
+      2. Add a row: id, category, question, answer, difficulty, source
+      3. Save as CSV — questions appear as random slides
+
+    HOW TO ADD CONTENT SLIDES:
+      1. Find the CONTENT_SLIDES array in this file
+      2. Add a new object following the type patterns:
+         - "hero"     → title + subtitle
+         - "quote"    → quote text + attribution
+         - "story"    → heading + body paragraph
+         - "stats"    → array of value/label pairs
+         - "facts"    → array of icon/title/text cards
+         - "timeline" → array of year/text entries
+         - "step"     → big number + step/tradition text
+
+    TIMING (edit at top of <script>):
+      SLIDE_MS   = 10000  (regular slides, 10s)
+      TRIVIA_MS  = 14000  (trivia slides, 14s)
+      REVEAL_MS  = 6000   (answer reveals after 6s)
+      PHOTO_MS   = 8000   (photo slides, 8s)
+
+    CONTROLS:
+      Right Arrow / Space / Click — Skip to next slide
+      F — Toggle fullscreen
+      Everything else is fully automatic.
+
+    DEPENDENCIES (CDN):
+      - Bootstrap 5.3.3 + Icons
+      - Animate.css 4.1.1
+      - Google Fonts (Playfair Display, Inter, Crimson Text)
+    ============================================================
+    -->
+
+</body>
+</html>
